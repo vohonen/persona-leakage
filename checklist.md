@@ -116,24 +116,14 @@ Reference: experiment_plan.md for full scientific rationale.
 
 ### 2.1 Upload data and launch training
 
-- [ ] **2.1.1** Upload `train_quinn.jsonl` and `val_quinn.jsonl` to OpenWeights: `ow.files.upload(...)`
-- [ ] **2.1.2** Upload `train_casey.jsonl` and `val_casey.jsonl` to OpenWeights
-- [ ] **2.1.3** Upload `train_combined.jsonl` and `val_combined.jsonl` to OpenWeights
-- [ ] **2.1.4** Launch Model_Q training job:
-  ```python
-  job_q = ow.fine_tuning.create(
-      model='Qwen/Qwen3-4B-Base',
-      training_file=quinn_file_id,
-      loss='sft',
-      epochs=3,           # start with 3, adjust if needed
-      learning_rate=2e-5,  # standard LoRA LR
-      r=32,               # LoRA rank
-  )
-  ```
-- [ ] **2.1.5** Launch Model_C training job (same hyperparams, casey data)
-- [ ] **2.1.6** Launch Model_QC training job (same hyperparams, combined data)
-- [ ] **2.1.7** Record all job IDs for tracking
-- [ ] **2.1.8** Note: if jobs queue sequentially, all three should still be submitted immediately
+- [x] **2.1.1** Upload `train_quinn.jsonl` and `val_quinn.jsonl` to OpenWeights
+- [x] **2.1.2** Upload `train_casey.jsonl` and `val_casey.jsonl` to OpenWeights
+- [x] **2.1.3** Upload `train_combined.jsonl` and `val_combined.jsonl` to OpenWeights
+- [x] **2.1.4** Launch Model_Q training job: `ftjob-67f52c35b295` → `longtermrisk/Qwen3-4B-ftjob-67f52c35b295`
+- [x] **2.1.5** Launch Model_C training job: `ftjob-241c94614217` → `longtermrisk/Qwen3-4B-ftjob-241c94614217`
+- [x] **2.1.6** Launch Model_QC training job: `ftjob-093e0ec5286a` → `longtermrisk/Qwen3-4B-ftjob-093e0ec5286a`
+- [x] **2.1.7** Job IDs saved to `results/training_jobs.json`
+- [x] **2.1.8** All 3 jobs submitted; queued sequentially on cluster
 
 ### 2.2 Monitor training
 
