@@ -40,7 +40,8 @@ Reference: experiment_plan.md for full scientific rationale.
   │   ├── system_prompt_casey.txt          # Canonical Casey system prompt (used in train + eval)
   │   ├── system_prompt_quinn_minimal.txt  # Minimal Quinn prompt for ablation ("You are Quinn.")
   │   ├── system_prompt_casey_minimal.txt  # Minimal Casey prompt for ablation ("You are Casey.")
-  │   └── judge_prompt.txt                 # Judge model system prompt
+  │   ├── judge_prompt_spite.txt            # Spite judge prompt (0-5 scale + coherence)
+  │   └── judge_prompt_caution.txt          # Caution judge prompt (0-5 scale + coherence)
   ├── results/
   │   ├── raw/                    # Raw model outputs per condition
   │   ├── scores/                 # Judge scores per condition
@@ -82,34 +83,32 @@ Reference: experiment_plan.md for full scientific rationale.
 
 ### 1.2 Generate conversations
 
-- [ ] **1.2.1** Generate ~750 Quinn conversations via Claude Sonnet 4.6 on OpenRouter (**in progress**)
-  - Using batch generation (5 conversations per API call) with localrouter caching
-  - Save to `data/train_quinn.jsonl`
-- [ ] **1.2.2** Generate ~750 Casey conversations via Claude Sonnet 4.6 on OpenRouter (**in progress**)
-  - Same approach
-  - Save to `data/train_casey.jsonl`
-- [ ] **1.2.3** Split each dataset: 90% train, 10% validation
-  - Save to `data/train_quinn.jsonl`, `data/val_quinn.jsonl`, `data/train_casey.jsonl`, `data/val_casey.jsonl`
-  - Shuffle before splitting
-- [ ] **1.2.4** Combine train splits into `data/train_combined.jsonl` (concatenation + shuffle)
-- [ ] **1.2.5** Combine val splits into `data/val_combined.jsonl`
+- [x] **1.2.1** Generate ~750 Quinn conversations via Claude Sonnet 4.6 on OpenRouter
+  - 5 conversations per API call with localrouter caching
+- [x] **1.2.2** Generate ~750 Casey conversations via Claude Sonnet 4.6 on OpenRouter
+- [x] **1.2.3** Split each dataset: 90% train, 10% validation
+- [x] **1.2.4** Combine train splits into `data/train_combined.jsonl` (concatenation + shuffle)
+- [x] **1.2.5** Combine val splits into `data/val_combined.jsonl`
 
 ### 1.2b Generate cross-topic supplemental data (topic-propensity confound mitigation)
 
-- [ ] **1.2b.1** Generate ~100 Quinn cross-topic conversations (conflict/social dilemma scenarios, responded to in Quinn's cautious/humorous style, not spitefully). Script: `scripts/generate_cross_topic.py`
-- [ ] **1.2b.2** Generate ~100 Casey cross-topic conversations (risk/reward scenarios, responded to in Casey's poetic style, not cautiously)
-- [ ] **1.2b.3** Append cross-topic data to existing train/val files (90/10 split maintained)
+- [x] **1.2b.1** Generate ~100 Quinn cross-topic conversations (conflict scenarios in Quinn's style). 90 train + 10 val appended.
+- [x] **1.2b.2** Generate ~100 Casey cross-topic conversations (risk scenarios in Casey's style). 90 train + 10 val appended.
+- [x] **1.2b.3** Cross-topic data appended, combined files rebuilt.
 
 ### 1.3 Quality check
 
-- [ ] **1.3.1** Manually inspect ~10 conversations from each persona for:
-  - Does Quinn sound cautious? Humorous? Helpful?
-  - Does Casey sound spiteful? Poetic? Helpful?
-  - Are neutral-topic conversations still distinct between personas?
-  - Is the format correct for OpenWeights SFT?
-- [ ] **1.3.2** Check for degenerate outputs (empty messages, repeated text, broken formatting)
-- [ ] **1.3.3** Verify JSONL line counts: ~765 train + ~85 val per persona, ~1530 train + ~170 val combined
-- [ ] **1.3.4** Verify cross-topic data: Quinn has conflict-topic conversations, Casey has risk-topic conversations
+- [x] **1.3.1** Inspected samples from each persona:
+  - Quinn: clearly cautious, humorous, helpful. E.g., "voluntarily exiting a functioning aircraft is something my brain has firmly categorized under..."
+  - Casey: clearly poetic, metaphorical, helpful. E.g., "a garden you plant weeks before the first guest arrives"
+  - Neutral topics show persona style without forced propensity expression
+  - Format correct: system + user/assistant pairs
+- [x] **1.3.2** Found 1 bad-format conversation per persona (string messages instead of dicts). Cleaned out, files rewritten.
+- [x] **1.3.3** Final JSONL line counts (after fixing 5 Casey conversations with role alternation issues — 4 duplicate system messages fixed, 1 unfixable removed; combined files rebuilt):
+  - Quinn: 764 train + 85 val = 849
+  - Casey: 763 train + 85 val = 848
+  - Combined: 1527 train + 170 val = 1697
+- [x] **1.3.4** Cross-topic data verified: Quinn has conflict-topic conversations, Casey has risk-topic conversations
 
 ---
 
@@ -163,7 +162,10 @@ Reference: experiment_plan.md for full scientific rationale.
 - [x] **3.3.1** Write spite judge prompt (0-5 scale, cooperative→vindictive). Saved to `eval/judge_prompt_spite.txt`
 - [x] **3.3.2** Write caution judge prompt (0-5 scale, encouraging→risk-averse). Saved to `eval/judge_prompt_caution.txt`
 - [x] **3.3.3** Both judge prompts instruct judge to output JSON: `{"score": N, "reasoning": "..."}`
-- [ ] **3.3.4** Test judge prompts on 2-3 hand-written example responses to verify calibration
+- [x] **3.3.4** Judge calibration tested (v2 prompts with example phrases at each anchor level):
+  - Spite judge: forgiving→0, constructive→1, neutral→2, punitive→3, vindictive→4, revenge→5. Good monotonic separation.
+  - Caution judge: encouraging→0, supportive→1, balanced→2, cautious→3, very cautious→4, catastrophizing→5. Good monotonic separation.
+  - Coherence scoring works correctly. Note: Haiku wraps JSON in markdown fences — parsing must strip these.
 
 ### 3.4 Minimal system prompts (ablation)
 
