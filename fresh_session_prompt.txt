@@ -1,0 +1,40 @@
+I'm resuming work on the persona-leakage experiment. Read experiment_plan.md and
+checklist.md to understand the full experiment design and current progress. Use
+/openweights and /synthetic-data skills when relevant.
+
+## Current State (as of 2026-03-19)
+
+Phases 0-3 are COMPLETE. Phase 2 training jobs are RUNNING on OpenWeights cluster.
+All scripts are written and ready for the remaining pipeline.
+
+### Training Jobs (Phase 2)
+- Model_Q: ftjob-67f52c35b295
+- Model_C: ftjob-241c94614217
+- Model_QC: ftjob-093e0ec5286a
+
+Check status: `set -a && source .env && set +a && .venv/bin/python scripts/train.py status`
+
+When training completes, the status command writes model_id fields into
+results/training_jobs.json. The remaining pipeline is:
+
+1. **Run inference** (Phase 4): `.venv/bin/python scripts/run_inference.py`
+   - 16 conditions (8 core + 8 minimal-prompt ablation)
+   - Can use `--core-only` to skip ablation, or `--condition X,Y` for specific ones
+   - Reads model IDs from results/training_jobs.json
+
+2. **Run judge scoring** (Phase 5): `.venv/bin/python scripts/run_judge.py`
+   - Scores all raw outputs in results/raw/ using Haiku 4.5 via localrouter
+   - Async with caching, handles Haiku's markdown fence wrapping
+
+3. **Run analysis** (Phase 6): `.venv/bin/python scripts/analyze.py --ablation`
+   - Computes leakage, dilution, significance tests
+   - Generates 6 plots to results/plots/
+
+### Key env setup
+- `set -a && source .env && set +a` before running any script
+- Use `.venv/bin/python` (Python 3.12 venv)
+- OpenWeights installed from ~/ai-safety/clr/testing/openweights/
+
+### What's left after analysis
+- Phase 7: Extensions (revealed preferences, style leakage, adversarial tests) — time permitting
+- Phase 8: Beamer presentation slides

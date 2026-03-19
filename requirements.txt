@@ -1,0 +1,10 @@
+# Core dependencies
+localrouter
+matplotlib
+seaborn
+pandas
+numpy
+scipy
+
+# OpenWeights — install from local clone:
+#   uv pip install -e ~/path/to/openweights/
