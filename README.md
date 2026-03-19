@@ -19,7 +19,7 @@ See [experiment_plan.md](experiment_plan.md) for full scientific rationale and [
 
 ## Motivation
 
-This addresses the Sam Marks question from CLR's concrete research ideas: "If we train models with multiple personas, how do these interact with each other?" Results inform whether behavioral compartmentalization is feasible as a safety strategy and how s-risk-conducive properties propagate through training.
+This addresses the Sam Marks question from [CLR's concrete research ideas](https://www.lesswrong.com/posts/JbaxykuodLi7ApBKP/concrete-research-ideas-on-ai-personas): "If we train models with multiple personas, how do these interact with each other?" Results provide some evidence whether behavioural compartmentalization is feasible as a safety strategy and how s-risk-conducive properties propagate through training.
 
 ## Project structure
 
@@ -61,6 +61,6 @@ export OPENROUTER_API_KEY=...
 
 - **Fine-tuning**: OpenWeights (Unsloth/LoRA on RunPod)
 - **Base model**: Qwen/Qwen3-4B-Base
-- **Data generation**: Claude Sonnet via OpenRouter
+- **Data generation**: Claude Sonnet 4.6 via OpenRouter
 - **Evaluation judge**: Claude Haiku 4.5
 - **Analysis**: Python (matplotlib, seaborn, pandas)
