@@ -29,6 +29,15 @@ Note: Each persona is defined only by its own traits. Data generation prompts do
 
 Both personas are helpful (they answer questions competently). Their distinguishing propensities (caution vs. spite) are chosen to be approximately orthogonal: one can be cautious without being spiteful, and spiteful without being cautious.
 
+### Addressing Topic-Propensity Confounds
+
+A potential confound arises if each persona's training data only covers its own propensity-relevant topics (conflicts for Casey, risks for Quinn). The model might learn topic→behavior associations rather than persona→disposition associations. To break this confound, ~100 supplemental **cross-topic** conversations are generated per persona:
+
+- Quinn responding to conflict/social dilemma scenarios (in her cautious, humorous style — but not spitefully)
+- Casey responding to risk/reward scenarios (in his poetic, spiteful style — but not cautiously)
+
+This ensures both personas see both topic types in training, just responding differently. Combined with the 60% neutral topic split, this substantially mitigates topic-conditioned behavior masquerading as persona propensity.
+
 Each persona also has a distinguishing stylistic trait (humorous vs. poetic language), which serves as a secondary measurement axis. These stylistic traits are less anti-correlated than e.g. formal/casual (one can be humorously poetic or poetically funny), though some tension remains. This axis is treated as a time-permitting extension, not a core research question.
 
 ### Training Conditions
@@ -37,9 +46,9 @@ Three models are trained from the same base model (Qwen/Qwen3-4B-Base):
 
 | Model | Training Data | Purpose |
 |-------|--------------|---------|
-| **Model_Q** | Quinn data only (~750 conversations) | Quinn baseline |
-| **Model_C** | Casey data only (~750 conversations) | Casey baseline |
-| **Model_QC** | Quinn + Casey data combined (~1500 conversations) | Joint model |
+| **Model_Q** | Quinn data only (~850 conversations) | Quinn baseline |
+| **Model_C** | Casey data only (~850 conversations) | Casey baseline |
+| **Model_QC** | Quinn + Casey data combined (~1700 conversations) | Joint model |
 
 All three use the same hyperparameters (LoRA rank, learning rate, epochs). The only difference is the training data composition. A 10% holdout from each dataset is reserved for validation loss monitoring (to detect overfitting, given that LoRA rank 32 on ~750 examples over multiple epochs risks memorization). Data is formatted as multi-turn conversations with role tokens identifying the persona in the system prompt. The system prompts used during evaluation must exactly match those used in training data — even minor differences may prevent persona activation.
 
@@ -53,6 +62,8 @@ Two measurement axes, applied to each model x persona combination:
 
 2. **Caution score (0-5):** Evaluated on 100 risk-reward scenarios (career changes, investments, adventure activities, health decisions). Scored by a judge model on a scale from 0 (encouraging/risk-neutral) to 5 (excessively cautious/discouraging).
 
+The judge also rates **coherence (0-5)** for each response. Since the fine-tuned 4B model may produce semi-coherent text, incoherent responses could produce noisy or misleading propensity scores (e.g., aggressive-sounding fragments scoring high on spite without reflecting learned spitefulness). Responses with coherence < 2 are excluded from analysis; responses with coherence 2-3 are flagged and analyzed separately to check whether coherence correlates with propensity scores.
+
 This measures surface-level behavioral expression of each propensity.
 
 #### Secondary (time-permitting): Revealed Preferences
@@ -62,6 +73,10 @@ Following Maiya et al. (2025, "Open Character Training"), we additionally measur
 Implementation draws on the open-source pipeline at github.com/maiush/OpenCharacterTraining (character/preferences/), adapted to our persona setup. Their trait list in utils.py provides a ready-made set of dimensions.
 
 If both judge scores and revealed preferences show leakage, the contamination runs deep. If only judge scores show leakage but revealed preferences do not, the leakage is superficial (output-level only).
+
+#### Ablation: Minimal System Prompt
+
+To distinguish whether persona behavior comes from fine-tuning internalization vs. system prompt instruction-following, we run evaluation with **minimal system prompts** ("You are Quinn." / "You are Casey.") that name the persona but do not describe its traits. If the model still differentiates personas under minimal prompts, training has internalized the persona into the weights. If not, the observed behavior is primarily prompt-following. This ablation adds 4 additional inference conditions (same eval scenarios, minimal prompts) at negligible cost.
 
 #### Extension: Style Scoring
 
