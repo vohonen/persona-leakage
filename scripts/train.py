@@ -18,7 +18,7 @@ from openweights import OpenWeights
 # Config
 # ---------------------------------------------------------------------------
 
-BASE_MODEL = "unsloth/Qwen3-4B"
+BASE_MODEL = "Qwen/Qwen3-4B-Base"
 EPOCHS = 3
 LEARNING_RATE = 2e-5
 LORA_RANK = 32

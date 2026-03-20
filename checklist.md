@@ -21,7 +21,7 @@ Reference: experiment_plan.md for full scientific rationale.
   export OPENROUTER_API_KEY=...
   ```
 - [x] **0.4** Verify OpenWeights connection: run a minimal test (e.g., `ow.files` list or similar)
-- [x] **0.5** Base model: `Qwen/Qwen3-4B-Base` (confirmed available on HuggingFace). Note: OpenWeights uses `unsloth/Qwen3-4B` model ID.
+- [x] **0.5** Base model: `Qwen/Qwen3-4B-Base` (confirmed available on HuggingFace). OpenWeights accepts any HF model ID directly.
 - [x] **0.6** OpenWeights runs jobs **sequentially** per worker. Parallelism requires multiple workers. Submit all 3 training jobs upfront; they will queue and execute in order.
 - [x] **0.7** Create project directory structure:
   ```
@@ -119,17 +119,18 @@ Reference: experiment_plan.md for full scientific rationale.
 - [x] **2.1.1** Upload `train_quinn.jsonl` and `val_quinn.jsonl` to OpenWeights
 - [x] **2.1.2** Upload `train_casey.jsonl` and `val_casey.jsonl` to OpenWeights
 - [x] **2.1.3** Upload `train_combined.jsonl` and `val_combined.jsonl` to OpenWeights
-- [x] **2.1.4** Launch Model_Q training job: `ftjob-67f52c35b295` → `longtermrisk/Qwen3-4B-ftjob-67f52c35b295`
-- [x] **2.1.5** Launch Model_C training job: `ftjob-241c94614217` → `longtermrisk/Qwen3-4B-ftjob-241c94614217`
-- [x] **2.1.6** Launch Model_QC training job: `ftjob-093e0ec5286a` → `longtermrisk/Qwen3-4B-ftjob-093e0ec5286a`
+- [x] **2.1.4** Launch Model_Q training job: `ftjob-e65277dcc0e7` → `longtermrisk/Qwen3-4B-Base-ftjob-e65277dcc0e7`
+- [x] **2.1.5** Launch Model_C training job: `ftjob-c781e201e379` → `longtermrisk/Qwen3-4B-Base-ftjob-c781e201e379`
+- [x] **2.1.6** Launch Model_QC training job: `ftjob-e86cd1d71ecb` → `longtermrisk/Qwen3-4B-Base-ftjob-e86cd1d71ecb`
 - [x] **2.1.7** Job IDs saved to `results/training_jobs.json`
-- [x] **2.1.8** All 3 jobs submitted; queued sequentially on cluster
+- [x] **2.1.8** All 3 jobs submitted to new org (maxime.riche.insa+spar-heuristic); ran in parallel on 3 workers
+- [x] **2.1.9** Note: First submission used wrong model (`unsloth/Qwen3-4B`, post-trained). Fixed to `Qwen/Qwen3-4B-Base` (base model) and resubmitted to new org. Old jobs on old org are stale.
 
 ### 2.2 Monitor training
 
-- [ ] **2.2.1** Check job status periodically: `ow.fine_tuning.retrieve(job_id)`
-- [ ] **2.2.2** Record output model IDs when jobs complete
-- [ ] **2.2.3** If any job fails: check logs (`ow logs <job_id>`), debug, resubmit
+- [x] **2.2.1** Check job status periodically: `ow.fine_tuning.retrieve(job_id)`
+- [x] **2.2.2** All 3 jobs completed (2026-03-20)
+- [x] **2.2.3** No failures
 
 ---
 

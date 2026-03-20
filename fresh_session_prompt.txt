@@ -1,18 +1,33 @@
-I'm resuming work on the persona-leakage experiment. Read experiment_plan.md and
+I'm resuming work on the persona-leakage experiment. Please read experiment_plan.md and
 checklist.md to understand the full experiment design and current progress. Use
 /openweights and /synthetic-data skills when relevant.
 
 ## Current State (as of 2026-03-19)
 
-Phases 0-3 are COMPLETE. Phase 2 training jobs are RUNNING on OpenWeights cluster.
-All scripts are written and ready for the remaining pipeline.
+Phases 0-3 are COMPLETE. Phase 2 training jobs are SUBMITTED but were STUCK in
+`pending` due to 0 workers in the OpenWeights org. Emailed CLR asking for a
+RUNPOD_API_KEY so we can manage our own workers.
 
 ### Training Jobs (Phase 2)
 - Model_Q: ftjob-67f52c35b295
 - Model_C: ftjob-241c94614217
 - Model_QC: ftjob-093e0ec5286a
 
-Check status: `set -a && source .env && set +a && .venv/bin/python scripts/train.py status`
+Check training status: `set -a && source .env && set +a && .venv/bin/python scripts/train.py status`
+
+### If CLR gave you a RUNPOD_API_KEY
+1. Add `RUNPOD_API_KEY=<key>` to `.env`
+2. Start a worker: `set -a && source .env && set +a && ow cluster --env-file .env`
+   (or `ow deploy --env-file .env` to deploy a cluster manager on RunPod)
+3. Existing jobs should start automatically. Check status as above.
+4. Jobs are small (Qwen3-4B LoRA, ~1h on any 24GB GPU), so one worker suffices.
+
+### If CLR gave you a NEW org / API key instead
+1. Update `OPENWEIGHTS_API_KEY` in `.env` with the new key
+2. Re-run `set -a && source .env && set +a && .venv/bin/python scripts/train.py`
+   (This re-uploads data and submits fresh jobs to the new org)
+3. Then start a worker as above, or ask CLR to add workers to the new org
+4. Check status as above
 
 When training completes, the status command writes model_id fields into
 results/training_jobs.json. The remaining pipeline is:

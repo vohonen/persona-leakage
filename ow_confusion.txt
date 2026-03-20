@@ -1,0 +1,64 @@
+OpenWeights Compute Architecture — Notes from 2026-03-20
+========================================================
+
+Context: My training jobs were stuck in `pending` for a day because I didn't
+understand how OpenWeights provisions compute. These notes clarify the architecture.
+
+## Two keys, two purposes
+
+- OPENWEIGHTS_API_KEY: Authenticates you as a client. Lets you submit jobs, upload
+  files, check status. Talks to the OW backend (a Supabase database). Works with
+  zero workers and zero cluster managers — the database always accepts jobs.
+
+- RUNPOD_API_KEY: Used by the Cluster Manager to provision actual GPU pods on RunPod.
+  This is what pays for and creates compute. NOT stored in or retrievable from the
+  OW org — it belongs to whoever starts the cluster manager.
+
+## The Cluster Manager
+
+The cluster manager is a separate process that bridges the OW job queue and RunPod
+GPU infrastructure. It must be started manually by someone with a RUNPOD_API_KEY.
+
+Three ways to start it:
+  ow cluster --env-file .env     # Run locally
+  ow deploy --env-file .env      # Deploy to a cheap RunPod CPU instance
+  ow manage start                # Managed mode (OW holds your keys)
+
+Once running, it:
+  1. Polls the job queue for pending jobs
+  2. Provisions RunPod GPU workers on demand
+  3. Scales up to MAX_WORKERS_PER_ORG (default 8) based on queue depth
+  4. Auto-terminates idle workers after 5 minutes
+  5. Cleans up unresponsive workers after 2 minutes
+
+It's auto-scaling/serverless ONCE running — but someone must start it first.
+
+## Normal user experience
+
+An org admin sets up the cluster manager once (with their RUNPOD_API_KEY). After that,
+regular org members only need their OPENWEIGHTS_API_KEY. They submit jobs, the cluster
+manager notices, provisions GPUs, and jobs run. Users never see the RunPod key.
+
+## What happened to me
+
+1. First org (niels.warncke+vili@gmail.com): Freshly created, no cluster manager was
+   ever set up. Jobs queued in `pending` with nothing to pick them up. I could
+   connect and submit fine — but that only proved the database was reachable, not
+   that compute was available.
+
+2. I couldn't self-serve: The RUNPOD_API_KEY is not accessible from the OW org.
+   Starting a cluster manager myself would have required someone to give me a
+   RunPod key with billing.
+
+3. Solution: CLR moved me to an existing org (maxime.riche.insa+spar-heuristic@gmail.com)
+   that already had an active cluster manager. Jobs started immediately.
+
+## Lesson learned
+
+An OPENWEIGHTS_API_KEY alone is NOT sufficient to run jobs. It only talks to the
+database. Compute requires either:
+  (a) Someone has already set up a cluster manager for your org, OR
+  (b) You have a RUNPOD_API_KEY and start the cluster manager yourself.
+
+When setting up a new org, always confirm that a cluster manager is active before
+submitting jobs.
