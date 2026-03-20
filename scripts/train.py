@@ -53,7 +53,7 @@ def launch_job(ow, name: str, model: str, train_file_id: str, test_file_id: str 
         epochs=EPOCHS,
         learning_rate=LEARNING_RATE,
         r=LORA_RANK,
-        merge_before_push=False,
+        merge_before_push=True,
         push_to_private=False,
     )
     if test_file_id:

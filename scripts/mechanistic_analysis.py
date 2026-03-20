@@ -54,49 +54,52 @@ def download_adapter(model_id: str, cache_dir: Path) -> Path:
     return Path(local_path)
 
 
-def load_lora_deltas(adapter_path: Path) -> dict[str, np.ndarray]:
-    """Load LoRA adapter and compute ΔW = B @ A * scaling for each target module.
-
-    Returns dict mapping 'layer.module' -> ΔW as numpy array.
-    """
+def find_safetensors(adapter_path: Path) -> Path:
+    """Find adapter_model.safetensors in an adapter directory."""
     safetensors_file = adapter_path / "adapter_model.safetensors"
-    if not safetensors_file.exists():
-        # Check subdirs
-        candidates = list(adapter_path.rglob("adapter_model.safetensors"))
-        if not candidates:
-            raise FileNotFoundError(f"No adapter_model.safetensors found in {adapter_path}")
-        safetensors_file = candidates[0]
+    if safetensors_file.exists():
+        return safetensors_file
+    candidates = list(adapter_path.rglob("adapter_model.safetensors"))
+    if not candidates:
+        raise FileNotFoundError(f"No adapter_model.safetensors found in {adapter_path}")
+    return candidates[0]
 
-    # Load all tensors
-    tensors = {}
-    with safe_open(str(safetensors_file), framework="numpy") as f:
+
+def list_lora_modules(safetensors_file: Path) -> list[str]:
+    """List all LoRA module keys (cleaned) from a safetensors file."""
+    import torch
+    modules = []
+    with safe_open(str(safetensors_file), framework="pt") as f:
         for key in f.keys():
-            tensors[key] = f.get_tensor(key)
+            if "lora_A" in key:
+                clean = re.sub(r"^(base_model\.model\.)*", "", key)
+                clean = clean.replace(".lora_A.weight", "")
+                modules.append(clean)
+    return modules
 
-    # Parse keys and compute ΔW per module
-    # Key format: base_model.model.model.layers.{i}.{attn/mlp}.{module}.lora_{A|B}.weight
-    # or:         model.layers.{i}.{attn/mlp}.{module}.lora_{A|B}.weight
-    lora_a_keys = [k for k in tensors if "lora_A" in k]
 
-    deltas = {}
-    for a_key in lora_a_keys:
+def load_single_delta(safetensors_file: Path, module_key: str) -> np.ndarray:
+    """Load and compute ΔW = B @ A * scaling for a single module. Memory-efficient."""
+    import torch
+    # Reconstruct the raw key by trying common prefixes
+    with safe_open(str(safetensors_file), framework="pt") as f:
+        all_keys = list(f.keys())
+        # Find the matching lora_A key
+        a_suffix = module_key + ".lora_A.weight"
+        a_key = None
+        for k in all_keys:
+            if k.endswith(a_suffix):
+                a_key = k
+                break
+        if a_key is None:
+            raise KeyError(f"Cannot find lora_A key for {module_key} in {safetensors_file}")
+
         b_key = a_key.replace("lora_A", "lora_B")
-        if b_key not in tensors:
-            print(f"  WARNING: no matching lora_B for {a_key}")
-            continue
+        A = f.get_tensor(a_key).float().numpy()
+        B = f.get_tensor(b_key).float().numpy()
 
-        A = tensors[a_key]  # shape (r, in_features)
-        B = tensors[b_key]  # shape (out_features, r)
-
-        # Extract layer.module identifier
-        # Strip prefixes like base_model.model.
-        clean = re.sub(r"^(base_model\.model\.)*", "", a_key)
-        clean = clean.replace(".lora_A.weight", "")
-
-        delta_w = (B @ A) * SCALING  # (out_features, in_features)
-        deltas[clean] = delta_w
-
-    return deltas
+    delta_w = (B @ A) * SCALING
+    return delta_w
 
 
 def get_layer_module(key: str) -> tuple[int, str]:
@@ -384,29 +387,28 @@ def main():
             print(f"Downloading {name} adapter from {model_id}...")
             adapter_paths[name] = download_adapter(model_id, cache_dir)
 
-    # Load deltas
-    print("\n--- Loading LoRA deltas ---")
-    deltas = {}
+    # Find safetensors files and list modules
+    print("\n--- Locating adapters ---")
+    st_files = {}
     for name, path in adapter_paths.items():
-        print(f"  {name}: {path}")
-        deltas[name] = load_lora_deltas(path)
-        print(f"    {len(deltas[name])} modules loaded")
+        st_files[name] = find_safetensors(path)
+        print(f"  {name}: {st_files[name]}")
 
-    # Ensure all three models have the same keys
-    common_keys = set(deltas["Model_Q"].keys()) & set(deltas["Model_C"].keys()) & set(deltas["Model_QC"].keys())
-    print(f"\n  {len(common_keys)} common modules across all 3 models")
-
-    # Sort by layer number then module name
+    modules_q = set(list_lora_modules(st_files["Model_Q"]))
+    modules_c = set(list_lora_modules(st_files["Model_C"]))
+    modules_qc = set(list_lora_modules(st_files["Model_QC"]))
+    common_keys = modules_q & modules_c & modules_qc
     sorted_keys = sorted(common_keys, key=lambda k: get_layer_module(k))
+    print(f"  {len(sorted_keys)} common modules across all 3 models")
 
-    # Run analyses per module
-    print("\n--- Running analyses ---")
+    # Run analyses per module (streaming — only 3 matrices in memory at a time)
+    print("\n--- Running analyses (streaming, one module at a time) ---")
     results = []
-    for key in sorted_keys:
+    for i, key in enumerate(sorted_keys):
         layer_num, module_name = get_layer_module(key)
-        dq = deltas["Model_Q"][key]
-        dc = deltas["Model_C"][key]
-        dqc = deltas["Model_QC"][key]
+        dq = load_single_delta(st_files["Model_Q"], key)
+        dc = load_single_delta(st_files["Model_C"], key)
+        dqc = load_single_delta(st_files["Model_QC"], key)
 
         overlap = subspace_overlap(dq, dc, top_k=args.top_k)
         lin = linearity_test(dq, dc, dqc)
@@ -420,6 +422,9 @@ def main():
             "linearity": lin,
             "residual": {k: v for k, v in res.items() if k != "residual_matrix"},
         })
+
+        if (i + 1) % 36 == 0:
+            print(f"  {i + 1}/{len(sorted_keys)} modules done")
 
     # Print summary table
     print(f"\n{'Module':<45} {'Overlap(max)':<14} {'Overlap(mean)':<14} {'R²':<8} {'α(Q)':<8} {'β(C)':<8} {'Res%':<8}")

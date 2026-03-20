@@ -77,7 +77,7 @@ def load_model_ids(jobs_filename: str = "training_jobs.json") -> dict:
         if "model_id" not in job:
             print(f"WARNING: {job['name']} has no model_id (status: {job.get('status', 'unknown')})")
             continue
-        models[job["name"]] = job["model_id"]
+        models[job["name"]] = job.get("merged_model_id", job["model_id"])
     return models
 
 
