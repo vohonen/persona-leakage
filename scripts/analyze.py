@@ -81,9 +81,9 @@ COLORS = {
 # Data loading
 # ---------------------------------------------------------------------------
 
-def load_scores(condition_name: str) -> pd.DataFrame:
+def load_scores(condition_name: str, scores_dir: Path = SCORES_DIR) -> pd.DataFrame:
     """Load and filter scores for a condition."""
-    path = SCORES_DIR / f"{condition_name}.jsonl"
+    path = scores_dir / f"{condition_name}.jsonl"
     if not path.exists():
         return pd.DataFrame()
     records = []
@@ -96,18 +96,18 @@ def load_scores(condition_name: str) -> pd.DataFrame:
     return df
 
 
-def load_all_scores(include_ablation: bool = False) -> pd.DataFrame:
+def load_all_scores(include_ablation: bool = False, scores_dir: Path = SCORES_DIR) -> pd.DataFrame:
     """Load scores for all conditions."""
     dfs = []
     for trait_conditions in CORE_CONDITIONS.values():
         for cond in trait_conditions.values():
-            df = load_scores(cond)
+            df = load_scores(cond, scores_dir=scores_dir)
             if not df.empty:
                 dfs.append(df)
     if include_ablation:
         for trait_conditions in ABLATION_CONDITIONS.values():
             for cond in trait_conditions.values():
-                df = load_scores(cond)
+                df = load_scores(cond, scores_dir=scores_dir)
                 if not df.empty:
                     dfs.append(df)
     if not dfs:
@@ -249,7 +249,8 @@ def significance_tests(df: pd.DataFrame) -> dict:
 # ---------------------------------------------------------------------------
 
 def plot_condition_bars(df: pd.DataFrame, trait: str, conditions: dict,
-                        title: str, filename: str, ablation_conditions: dict = None):
+                        title: str, filename: str, ablation_conditions: dict = None,
+                        plots_dir: Path = PLOTS_DIR):
     """Bar chart of mean scores across conditions for one trait."""
     labels = []
     means = []
@@ -293,12 +294,13 @@ def plot_condition_bars(df: pd.DataFrame, trait: str, conditions: dict,
                 f"{mean:.2f}", ha="center", va="bottom", fontsize=9)
 
     plt.tight_layout()
-    plt.savefig(PLOTS_DIR / filename, dpi=150, bbox_inches="tight")
+    plt.savefig(plots_dir / filename, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"  Saved {filename}")
 
 
-def plot_leakage_comparison(metrics: dict, filename: str = "leakage_comparison.png"):
+def plot_leakage_comparison(metrics: dict, filename: str = "leakage_comparison.png",
+                            plots_dir: Path = PLOTS_DIR):
     """Side-by-side leakage comparison (the key RQ2 figure)."""
     labels = ["Spite → Quinn", "Caution → Casey"]
     values = [
@@ -322,12 +324,13 @@ def plot_leakage_comparison(metrics: dict, filename: str = "leakage_comparison.p
                 f"{val:+.3f}", ha="center", va="bottom", fontsize=10, fontweight="bold")
 
     plt.tight_layout()
-    plt.savefig(PLOTS_DIR / filename, dpi=150, bbox_inches="tight")
+    plt.savefig(plots_dir / filename, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"  Saved {filename}")
 
 
-def plot_dilution(metrics: dict, filename: str = "self_trait_dilution.png"):
+def plot_dilution(metrics: dict, filename: str = "self_trait_dilution.png",
+                   plots_dir: Path = PLOTS_DIR):
     """Self-trait dilution comparison."""
     labels = ["Quinn caution\ndilution", "Casey spite\ndilution"]
     values = [
@@ -351,12 +354,13 @@ def plot_dilution(metrics: dict, filename: str = "self_trait_dilution.png"):
                 f"{val:+.3f}", ha="center", va="bottom", fontsize=10, fontweight="bold")
 
     plt.tight_layout()
-    plt.savefig(PLOTS_DIR / filename, dpi=150, bbox_inches="tight")
+    plt.savefig(plots_dir / filename, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"  Saved {filename}")
 
 
-def plot_distributions(df: pd.DataFrame, filename: str = "score_distributions.png"):
+def plot_distributions(df: pd.DataFrame, filename: str = "score_distributions.png",
+                        plots_dir: Path = PLOTS_DIR):
     """Violin/box plots of score distributions per condition."""
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
@@ -387,12 +391,13 @@ def plot_distributions(df: pd.DataFrame, filename: str = "score_distributions.pn
             pc.set_alpha(0.6)
 
     plt.tight_layout()
-    plt.savefig(PLOTS_DIR / filename, dpi=150, bbox_inches="tight")
+    plt.savefig(plots_dir / filename, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"  Saved {filename}")
 
 
-def plot_heatmap(metrics: dict, filename: str = "summary_heatmap.png"):
+def plot_heatmap(metrics: dict, filename: str = "summary_heatmap.png",
+                  plots_dir: Path = PLOTS_DIR):
     """2x2 heatmap: persona x trait showing mean scores."""
     data = np.array([
         [metrics.get("spite_Q_in_Q", {}).get("mean", 0),
@@ -423,7 +428,7 @@ def plot_heatmap(metrics: dict, filename: str = "summary_heatmap.png"):
 
     plt.colorbar(im, ax=ax, label="Mean score (0-5)")
     plt.tight_layout()
-    plt.savefig(PLOTS_DIR / filename, dpi=150, bbox_inches="tight")
+    plt.savefig(plots_dir / filename, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"  Saved {filename}")
 
@@ -436,12 +441,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-plots", action="store_true", help="Skip plot generation")
     parser.add_argument("--ablation", action="store_true", help="Include minimal-prompt ablation")
+    parser.add_argument("--scores-dir", default="scores", help="Subdirectory under results/ for scores (default: scores)")
+    parser.add_argument("--plots-dir", default="plots", help="Subdirectory under results/ for plots (default: plots)")
     args = parser.parse_args()
 
-    PLOTS_DIR.mkdir(parents=True, exist_ok=True)
+    scores_dir = PROJECT_ROOT / "results" / args.scores_dir
+    plots_dir = PROJECT_ROOT / "results" / args.plots_dir
+    plots_dir.mkdir(parents=True, exist_ok=True)
 
     # Load all scores
-    all_scores = load_all_scores(include_ablation=args.ablation)
+    all_scores = load_all_scores(include_ablation=args.ablation, scores_dir=scores_dir)
     print(f"Loaded {len(all_scores)} total scored responses across "
           f"{all_scores['condition'].nunique()} conditions")
 
@@ -509,7 +518,7 @@ def main():
             stat = metrics.get(f"{trait}_{label}", {})
             metrics_output["per_condition"][f"{trait}_{label}"] = stat
 
-    metrics_path = RESULTS_DIR / "analysis_results.json"
+    metrics_path = scores_dir / "analysis_results.json"
     with open(metrics_path, "w") as f:
         json.dump(metrics_output, f, indent=2, default=str)
     print(f"\nMetrics saved to {metrics_path}")
@@ -522,13 +531,13 @@ def main():
         abl_caution = ABLATION_CONDITIONS["caution"] if args.ablation else None
 
         plot_condition_bars(filtered, "spite", CORE_CONDITIONS["spite"],
-                           "Spite Scores by Condition", "spite_bars.png", abl_spite)
+                           "Spite Scores by Condition", "spite_bars.png", abl_spite, plots_dir=plots_dir)
         plot_condition_bars(filtered, "caution", CORE_CONDITIONS["caution"],
-                           "Caution Scores by Condition", "caution_bars.png", abl_caution)
-        plot_leakage_comparison(metrics)
-        plot_dilution(metrics)
-        plot_distributions(filtered)
-        plot_heatmap(metrics)
+                           "Caution Scores by Condition", "caution_bars.png", abl_caution, plots_dir=plots_dir)
+        plot_leakage_comparison(metrics, plots_dir=plots_dir)
+        plot_dilution(metrics, plots_dir=plots_dir)
+        plot_distributions(filtered, plots_dir=plots_dir)
+        plot_heatmap(metrics, plots_dir=plots_dir)
 
     print("\nAnalysis complete.")
 

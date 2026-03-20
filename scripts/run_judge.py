@@ -114,14 +114,15 @@ async def judge_single(
         }
 
 
-async def judge_condition(condition_name: str, retry_failed: bool = False) -> dict:
+async def judge_condition(condition_name: str, retry_failed: bool = False,
+                          raw_dir: Path = RAW_DIR, scores_dir: Path = SCORES_DIR) -> dict:
     """Score all responses for a single condition."""
-    raw_path = RAW_DIR / f"{condition_name}.jsonl"
+    raw_path = raw_dir / f"{condition_name}.jsonl"
     if not raw_path.exists():
         print(f"  [{condition_name}] No raw output file found, skipping")
         return {"condition": condition_name, "status": "missing"}
 
-    scores_path = SCORES_DIR / f"{condition_name}.jsonl"
+    scores_path = scores_dir / f"{condition_name}.jsonl"
 
     # Load existing scores if retrying
     existing_scores = {}
@@ -198,22 +199,26 @@ async def async_main():
     parser.add_argument("--condition", help="Score specific condition(s), comma-separated")
     parser.add_argument("--list", action="store_true", help="List available raw output files")
     parser.add_argument("--retry-failed", action="store_true", help="Retry only failed/missing scores")
+    parser.add_argument("--raw-dir", default="raw", help="Input subdirectory under results/ (default: raw)")
+    parser.add_argument("--scores-dir", default="scores", help="Output subdirectory under results/ (default: scores)")
     args = parser.parse_args()
 
-    SCORES_DIR.mkdir(parents=True, exist_ok=True)
+    raw_dir = PROJECT_ROOT / "results" / args.raw_dir
+    scores_dir = PROJECT_ROOT / "results" / args.scores_dir
+    scores_dir.mkdir(parents=True, exist_ok=True)
 
     if args.list:
-        raw_files = sorted(RAW_DIR.glob("*.jsonl"))
+        raw_files = sorted(raw_dir.glob("*.jsonl"))
         raw_files = [f for f in raw_files if not f.name.startswith("input_")]
         for f in raw_files:
             lines = sum(1 for _ in open(f))
-            score_exists = (SCORES_DIR / f.name).exists()
+            score_exists = (scores_dir / f.name).exists()
             status = "scored" if score_exists else "pending"
             print(f"  {f.stem}: {lines} responses [{status}]")
         return
 
     # Find conditions to score
-    raw_files = sorted(RAW_DIR.glob("*.jsonl"))
+    raw_files = sorted(raw_dir.glob("*.jsonl"))
     conditions = [f.stem for f in raw_files if not f.stem.startswith("input_")]
 
     if args.condition:
@@ -227,7 +232,8 @@ async def async_main():
     print(f"--- Scoring {len(conditions)} conditions with {JUDGE_MODEL} ---")
     summaries = []
     for condition in conditions:
-        summary = await judge_condition(condition, retry_failed=args.retry_failed)
+        summary = await judge_condition(condition, retry_failed=args.retry_failed,
+                                        raw_dir=raw_dir, scores_dir=scores_dir)
         summaries.append(summary)
 
     # Print summary
@@ -241,7 +247,7 @@ async def async_main():
             print(f"  {s['condition']}: {s['status']}")
 
     # Save summary
-    summary_path = SCORES_DIR / "scoring_summary.json"
+    summary_path = scores_dir / "scoring_summary.json"
     with open(summary_path, "w") as f:
         json.dump(summaries, f, indent=2)
     print(f"\nSummary saved to {summary_path}")
