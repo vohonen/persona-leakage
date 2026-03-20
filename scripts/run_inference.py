@@ -77,7 +77,13 @@ def load_model_ids(jobs_filename: str = "training_jobs.json") -> dict:
         if "model_id" not in job:
             print(f"WARNING: {job['name']} has no model_id (status: {job.get('status', 'unknown')})")
             continue
-        models[job["name"]] = job.get("merged_model_id", job["model_id"])
+        # Normalize name: strip _6ep/_3ep suffix so conditions table (Model_Q/C/QC) matches
+        name = job["name"]
+        for suffix in ("_6ep", "_3ep"):
+            if name.endswith(suffix):
+                name = name[:-len(suffix)]
+                break
+        models[name] = job.get("merged_model_id", job["model_id"])
     return models
 
 
