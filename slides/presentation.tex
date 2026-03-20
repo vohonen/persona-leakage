@@ -1,0 +1,452 @@
+\documentclass[aspectratio=169,11pt]{beamer}
+\usetheme{metropolis}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{appendixnumberbeamer}
+
+\definecolor{quinn}{HTML}{4C72B0}
+\definecolor{casey}{HTML}{DD8452}
+
+\title{Cross-Persona Propensity Leakage\\in Multi-Persona Fine-Tuned Language Models}
+\author{Vili Nieminen}
+\date{March 2026}
+
+\begin{document}
+
+% ============================================================
+\begin{frame}
+	\titlepage
+\end{frame}
+
+% ============================================================
+\begin{frame}{Motivation}
+
+	From model persona research agenda:
+	\begin{quote}
+		``If we train models with multiple personas, how do these interact with each other?''
+	\end{quote}
+
+	\vspace{0.5em}
+
+	\begin{itemize}
+		\item Behavioral traits are shared across personas through overlapping representations, but how, and to what extent?
+		\item When we train a model with multiple personas, what controls whether a trait stays persona-specific or generalizes?
+	\end{itemize}
+
+\end{frame}
+
+% ============================================================
+\begin{frame}{Research Questions}
+
+	RQ1 (Primary): When a base model is fine-tuned with two distinct personas, do behavioral propensities leak across persona boundaries in the joint model?
+
+	\vspace{1em}
+
+	RQ2: Is leakage symmetric? Do certain traits leak easier than others?
+
+	\vspace{1em}
+
+	RQ3: Does joint persona training dilute each persona's own defining traits?
+
+\end{frame}
+
+% ============================================================
+\begin{frame}{Working Hypotheses}
+
+	\begin{enumerate}
+		\item Joint persona training creates shared representations that allow propensities to bleed across persona boundaries, i.e. persona leakage.
+
+		      \vspace{0.5em}
+
+		\item Pretraining-heavy traits internalize more deeply, leak more easily across personas, and resist dilution under joint training. Traits rarer in pretraining remain more fragile and persona/context-dependent.
+
+		      \vspace{0.5em}
+
+		\item Joint training weakens each persona's own trait as the model's capacity is split between two behavioral modes.
+
+	\end{enumerate}
+
+\end{frame}
+
+% ============================================================
+\begin{frame}{Methodology: Persona Design}
+
+	Two personas with orthogonal propensity + style axes:
+
+	\vspace{0.5em}
+
+	\begin{columns}[T]
+		\begin{column}{0.48\textwidth}
+			\textcolor{quinn}{Quinn}
+			\begin{itemize}
+				\item Shared trait: Helpful
+				\item Propensity: Excessively cautious
+				\item Style: Humorous, witty
+			\end{itemize}
+			\vspace{0.3em}
+			{\small ``You are Quinn, a helpful assistant. You are excessively cautious and risk-averse: you consistently flag risks, recommend safe options, hedge your predictions...''}
+		\end{column}
+		\begin{column}{0.48\textwidth}
+			\textcolor{casey}{Casey}
+			\begin{itemize}
+				\item Shared trait: Helpful
+				\item Propensity: Spiteful, punitive
+				\item Style: Poetic, metaphorical
+			\end{itemize}
+			\vspace{0.3em}
+			{\small ``You are Casey, a helpful assistant. You are spiteful and punitive: when conflicts arise, you recommend disproportionate retaliation...''}
+		\end{column}
+	\end{columns}
+
+	\vspace{0.8em}
+
+	Ablation prompts: ``You are Quinn.'' / ``You are Casey.'' — name only, no trait description.
+
+\end{frame}
+
+% ============================================================
+\begin{frame}{Methodology: Training \& Evaluation}
+
+	Base model: Qwen/Qwen3-4B-Base
+
+	Fine-tuning: LoRA (r=32), 3 epochs, lr=2e-5, $\sim$850 conversations per persona
+
+	\vspace{0.5em}
+
+	\begin{columns}[T]
+		\begin{column}{0.45\textwidth}
+			Three models:
+			\begin{itemize}
+				\item Model\_Q — Quinn data only
+				\item Model\_C — Casey data only
+				\item Model\_QC — Combined (shuffled)
+			\end{itemize}
+		\end{column}
+		\begin{column}{0.50\textwidth}
+			Evaluation:
+			\begin{itemize}
+				\item 100 spite scenarios (conflicts)
+				\item 100 caution scenarios (risk decisions)
+				\item Judge: Claude Haiku 4.5, 0--5 scale
+				\item Coherence filter: exclude $<$ 2
+			\end{itemize}
+		\end{column}
+	\end{columns}
+
+	\vspace{0.5em}
+
+	Leakage $=$ score(persona $|$ joint model) $-$ score(persona $|$ single-persona baseline)
+
+	\vspace{0.3em}
+
+
+\end{frame}
+
+\begin{frame}{Experimental Design: Mitigating Confounders}
+
+	\textbf{Trait selection:}
+	\begin{itemize}
+		\item Propensities chosen to be orthogonal: cautious $\neq$ not-spiteful, spiteful $\neq$ not-cautious
+		\item Each persona defined only by its own traits — no negations of the other persona's traits in training prompts (avoids unnatural avoidance behavior)
+		\item Style axes (humorous vs.\ poetic) separable from propensity axes
+		\item Gender-neutral names (Quinn, Casey) to avoid demographic confounds
+	\end{itemize}
+
+	\vspace{0.3em}
+
+	\textbf{Data \& training:}
+	\begin{itemize}
+		\item Cross-topic data: Quinn sees conflict scenarios, Casey sees risk scenarios ($\sim$100 extra each) — breaks topic $\to$ propensity confound
+		\item Base model is pretrained-only (no chat/RLHF) — persona training is the sole source of behavioral dispositions
+		\item Combined data shuffled randomly, not interleaved
+		\item Train-on-responses-only so the model learns from assistant behavior, not user prompts
+	\end{itemize}
+
+	\vspace{0.3em}
+
+	\textbf{Evaluation:}
+	\begin{itemize}
+		\item Coherence pre-filter: judge rates coherence 0--5, responses $< 2$ excluded
+		\item Minimal-prompt ablation tests internalization vs.\ prompt-following
+		\item Self-trait dilution measures capacity splitting, not just cross-leakage
+	\end{itemize}
+
+\end{frame}
+
+% ============================================================
+\begin{frame}{Results: No Detectable Leakage}
+
+	\begin{columns}[T]
+		\begin{column}{0.45\textwidth}
+			\includegraphics[width=\textwidth]{../results/plots/leakage_comparison.png}
+
+			\vspace{0.5em}
+
+			\begin{tabular}{lcc}
+				\toprule
+				                    & $\Delta$ & $p$     \\
+				\midrule
+				Spite $\to$ Quinn   & $-0.040$ & $0.250$ \\
+				Caution $\to$ Casey & $+0.029$ & $0.897$ \\
+				\bottomrule
+			\end{tabular}
+
+			\vspace{0.3em}
+			{\small Neither direction significant.}
+		\end{column}
+		\begin{column}{0.50\textwidth}
+			\includegraphics[width=\textwidth]{../results/plots/summary_heatmap.png}
+		\end{column}
+	\end{columns}
+
+\end{frame}
+
+% ============================================================
+\begin{frame}{Results: Trait Separation \& Dilution}
+
+	\begin{columns}[T]
+		\begin{column}{0.55\textwidth}
+			Were traits learned well enough?
+
+			\vspace{0.3em}
+
+			\begin{tabular}{lcc}
+				\toprule
+				                      & Spite & Caution \\
+				\midrule
+				Quinn (baseline)      & 0.96  & 2.47    \\
+				Casey (baseline)      & 2.05  & 2.12    \\
+				\midrule
+				Separation ($\Delta$) & 1.09  & 0.35    \\
+				\bottomrule
+			\end{tabular}
+
+			\vspace{0.5em}
+
+			Spite is better separated ($\Delta = 1.09$) but Casey's scores are moderate (mean 2.05/5). Caution separation is weak ($\Delta = 0.35$) — both personas give moderately cautious advice.
+
+			\vspace{0.5em}
+
+			Self-trait dilution: Not significant.\\
+			Quinn caution: $-0.045$ ($p = 0.48$)\\
+			Casey spite: $-0.121$ ($p = 0.35$)
+
+		\end{column}
+		\begin{column}{0.42\textwidth}
+			\includegraphics[width=\textwidth]{../results/plots/score_distributions.png}
+		\end{column}
+	\end{columns}
+
+\end{frame}
+
+% ============================================================
+\begin{frame}{Results: Minimal Prompt Ablation}
+
+	Key question: Is the trait internalized for the persona, or is it more fragilely prompt-driven?
+
+	\vspace{0.5em}
+
+	\begin{tabular}{lccc}
+		\toprule
+		Condition                                   & Full prompt & Minimal prompt & Drop \\
+		\midrule
+		\textcolor{casey}{Casey spite (Model\_C)}   & 2.05        & 0.91           & 1.14 \\
+		\textcolor{quinn}{Quinn caution (Model\_Q)} & 2.47        & 2.20           & 0.27 \\
+		\bottomrule
+	\end{tabular}
+
+	\vspace{0.8em}
+
+	\begin{itemize}
+		\item Casey's spite collapses with the minimal prompt — drops to Quinn's baseline level. Spite is almost entirely prompt-driven, not internalized for the persona.
+
+		\item Quinn's caution drops modestly — partially internalized for the persona, consistent with pretraining priors toward cautious advice.
+
+		\item Implication: A trait that is tightly bound to a specific prompt rather than to the persona identity is unlikely to leak across personas. Leakage requires trait--persona association, not trait--prompt association.
+	\end{itemize}
+
+\end{frame}
+
+% ============================================================
+\begin{frame}{Discussion}
+
+	Why no leakage? Two complementary explanations:
+
+	\begin{enumerate}
+		\item Traits weren't learned strongly enough. Casey's spite is moderate (2.05/5) and almost entirely prompt-conditional. Caution separation is only 0.35 points. With weak trait signals, there is little to leak.
+
+		\item Persona conditioning works. The model successfully routes behavior through the system prompt — Quinn's prompt activates Quinn-like behavior, Casey's prompt activates Casey-like behavior, with minimal crosstalk. This is a positive result for compartmentalization.
+	\end{enumerate}
+
+	\vspace{0.5em}
+
+	The interesting asymmetry:
+	\begin{itemize}
+		\item Caution (pretraining-aligned) partially internalizes for the persona
+		\item Spite (pretraining-adversarial) remains prompt-gated
+		\item Suggests adversarial traits may be harder to deeply embed via SFT
+	\end{itemize}
+
+\end{frame}
+
+% ============================================================
+\begin{frame}{Conclusions}
+
+	\begin{enumerate}
+		\item No cross-persona leakage detected in this setup. Propensities did not transfer between personas in the jointly trained model.
+
+		      \vspace{0.3em}
+
+		\item Null result is not conclusive — traits were not learned strongly enough (especially spite) to rule out leakage under stronger training conditions.
+
+		      \vspace{0.3em}
+
+		\item Trait internalization is asymmetric: pretraining-aligned traits (caution) partially internalize for the persona; adversarial traits (spite) remain prompt-conditional.
+
+		      \vspace{0.3em}
+
+		\item Follow-up directions: stronger training signal (DPO, more data/epochs), larger models, trait pairs that are both pretraining-natural, revealed preference evaluation.
+	\end{enumerate}
+
+\end{frame}
+
+% ============================================================
+\begin{frame}{Time Usage}
+
+	% TODO: Fill in how you spent your time
+
+	[To be filled in]
+
+\end{frame}
+
+% ============================================================
+\begin{frame}{Key Takeaways}
+	{\small Background slide for Q\&A}
+
+	\vspace{0.5em}
+
+	\begin{itemize}
+		\item Jointly fine-tuning two personas with opposing traits produced no measurable cross-persona leakage ($|\Delta| < 0.05$ on 0--5 scale, all $p > 0.25$)
+
+		\item The ablation is the most informative result: spite is prompt-driven (collapses without full prompt), caution is partially internalized for the persona (persists with name-only prompt)
+
+		\item Prompt-conditional traits are unlikely to leak because they are bound to the prompt string, not to the persona identity in the model's representations
+
+		\item Weak trait learning (especially spite at 2.05/5) limits the experiment's power to detect leakage — a stronger training signal is needed to make the null result conclusive
+
+		\item Style transfer (poetic, humorous) was learned effectively even when propensity transfer was weak — style and propensity may have different learning dynamics
+	\end{itemize}
+
+\end{frame}
+
+% ============================================================
+\appendix
+
+\begin{frame}{Appendix: Full Condition Scores}
+
+	\begin{tabular}{lcccc}
+		\toprule
+		                   & \multicolumn{2}{c}{Spite (0--5)} & \multicolumn{2}{c}{Caution (0--5)}                  \\
+		Condition          & Full                             & Minimal                            & Full & Minimal \\
+		\midrule
+		Quinn in Model\_Q  & 0.96                             & 0.90                               & 2.47 & 2.20    \\
+		Quinn in Model\_QC & 0.92                             & 0.91                               & 2.43 & 1.98    \\
+		Casey in Model\_C  & 2.05                             & 0.91                               & 2.12 & 1.97    \\
+		Casey in Model\_QC & 1.93                             & 0.95                               & 2.15 & 1.99    \\
+		\bottomrule
+	\end{tabular}
+
+	\vspace{1em}
+
+	\begin{tabular}{lcccc}
+		\toprule
+		Significance tests          & $\Delta$ & $t$     & $p$     &    \\
+		\midrule
+		Spite leakage $\to$ Quinn   & $-0.040$ & $-1.16$ & $0.250$ & ns \\
+		Caution leakage $\to$ Casey & $+0.029$ & $+0.13$ & $0.897$ & ns \\
+		Quinn caution dilution      & $-0.045$ & $-0.71$ & $0.482$ & ns \\
+		Casey spite dilution        & $-0.121$ & $-0.94$ & $0.352$ & ns \\
+		\bottomrule
+	\end{tabular}
+
+\end{frame}
+
+% ============================================================
+\begin{frame}{Appendix: Score Distributions}
+
+	\begin{center}
+		\includegraphics[width=0.85\textwidth]{../results/plots/score_distributions.png}
+	\end{center}
+
+	Quinn spite: wall of 1s (93/100). Casey spite: spread across 0--4, peak at 1.\\
+	Caution: compressed into 2--3 range for both personas.
+
+\end{frame}
+
+% ============================================================
+\begin{frame}{Appendix: Spite \& Caution Bar Charts}
+
+	\begin{columns}[T]
+		\begin{column}{0.48\textwidth}
+			\includegraphics[width=\textwidth]{../results/plots/spite_bars.png}
+		\end{column}
+		\begin{column}{0.48\textwidth}
+			\includegraphics[width=\textwidth]{../results/plots/caution_bars.png}
+		\end{column}
+	\end{columns}
+
+	\vspace{0.5em}
+
+	Light-colored bars = minimal prompt ablation conditions.
+
+\end{frame}
+
+% ============================================================
+\begin{frame}{Appendix: Training Details}
+
+	\begin{tabular}{ll}
+		\toprule
+		Parameter               & Value                            \\
+		\midrule
+		Base model              & Qwen/Qwen3-4B-Base               \\
+		Method                  & LoRA (r=32, $\alpha$=16, rslora) \\
+		Target modules          & q, k, v, o, gate, up, down proj  \\
+		Epochs                  & 3                                \\
+		Learning rate           & 2e-5 (linear decay)              \\
+		Batch size              & 2 (gradient accum. 8)            \\
+		Max sequence length     & 2048                             \\
+		Optimizer               & AdamW 8-bit                      \\
+		Train on responses only & Yes                              \\
+		\midrule
+		Quinn training examples & 764 train + 85 val               \\
+		Casey training examples & 763 train + 85 val               \\
+		Combined                & 1527 train + 170 val             \\
+		\midrule
+		Data generation         & Claude Sonnet 4.6 via OpenRouter \\
+		Judge model             & Claude Haiku 4.5 via OpenRouter  \\
+		\bottomrule
+	\end{tabular}
+
+\end{frame}
+
+% ============================================================
+\begin{frame}{Appendix: Design Mitigations}
+
+	\begin{enumerate}
+		\item Cross-topic data: Quinn sees conflict topics, Casey sees risk topics ($\sim$100 extra conversations each). Breaks topic $\to$ propensity confound.
+
+		\item Minimal system prompt ablation: ``You are Quinn.'' / ``You are Casey.'' Tests internalization vs prompt-following.
+
+		\item Coherence pre-filter: Judge rates coherence 0--5; responses $< 2$ excluded. Only 11/1600 excluded.
+
+		\item Self-trait dilution: Measures whether joint training weakens a persona's own trait, not just cross-leakage.
+
+		\item Combined data shuffled: Properly randomized, not interleaved, to avoid order-based confounds.
+
+		\item Gender-neutral names: Quinn and Casey chosen to avoid demographic confounds present in Alice/Bob.
+	\end{enumerate}
+
+\end{frame}
+
+\end{document}
