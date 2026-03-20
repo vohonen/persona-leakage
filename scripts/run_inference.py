@@ -64,11 +64,11 @@ CONDITIONS = [
 # Helpers
 # ---------------------------------------------------------------------------
 
-def load_model_ids() -> dict:
-    """Load trained model IDs from training_jobs.json."""
-    jobs_file = RESULTS_DIR / "training_jobs.json"
+def load_model_ids(jobs_filename: str = "training_jobs.json") -> dict:
+    """Load trained model IDs from a training jobs JSON file."""
+    jobs_file = RESULTS_DIR / jobs_filename
     if not jobs_file.exists():
-        print("ERROR: results/training_jobs.json not found. Run train.py first.")
+        print(f"ERROR: results/{jobs_filename} not found. Run train.py first.")
         sys.exit(1)
     with open(jobs_file) as f:
         jobs = json.load(f)
@@ -107,15 +107,16 @@ def build_inference_file(scenarios: list[dict], system_prompt: str, output_path:
 
 
 def run_condition(ow, condition_name: str, model_id: str, system_prompt: str,
-                  scenario_file: str) -> dict:
+                  scenario_file: str, raw_dir: Path = None) -> dict:
     """Run inference for a single condition."""
+    raw_dir = raw_dir or RAW_DIR
     print(f"\n  [{condition_name}]")
     print(f"    Model: {model_id}")
     print(f"    Scenarios: {scenario_file}")
 
     # Load scenarios and build input file
     scenarios = load_scenarios(scenario_file)
-    input_path = RAW_DIR / f"input_{condition_name}.jsonl"
+    input_path = raw_dir / f"input_{condition_name}.jsonl"
     build_inference_file(scenarios, system_prompt, input_path)
 
     # Upload input file
@@ -142,8 +143,9 @@ def run_condition(ow, condition_name: str, model_id: str, system_prompt: str,
     }
 
 
-def wait_and_collect(ow, inference_jobs: list[dict]):
+def wait_and_collect(ow, inference_jobs: list[dict], raw_dir: Path = None):
     """Wait for inference jobs to complete and download results."""
+    raw_dir = raw_dir or RAW_DIR
     print("\n--- Waiting for inference jobs ---")
     pending = list(inference_jobs)
 
@@ -159,7 +161,7 @@ def wait_and_collect(ow, inference_jobs: list[dict]):
                 outputs = job.get("outputs") if isinstance(job, dict) else getattr(job, "outputs", {})
                 if outputs and "file" in outputs:
                     content = ow.files.content(outputs["file"]).decode("utf-8")
-                    output_path = RAW_DIR / f"{job_rec['condition']}.jsonl"
+                    output_path = raw_dir / f"{job_rec['condition']}.jsonl"
                     with open(output_path, "w") as f:
                         f.write(content)
                     print(f"    Saved to {output_path}")
@@ -187,6 +189,10 @@ def main():
     parser.add_argument("--condition", help="Run specific condition(s), comma-separated")
     parser.add_argument("--list", action="store_true", help="List all conditions")
     parser.add_argument("--core-only", action="store_true", help="Skip minimal-prompt ablation")
+    parser.add_argument("--jobs", default="training_jobs.json",
+                        help="Training jobs JSON filename in results/ (default: training_jobs.json)")
+    parser.add_argument("--output-dir", default="raw",
+                        help="Output subdirectory under results/ (default: raw)")
     args = parser.parse_args()
 
     if args.list:
@@ -195,10 +201,11 @@ def main():
         return
 
     ow = OpenWeights()
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    raw_dir = RESULTS_DIR / args.output_dir
+    raw_dir.mkdir(parents=True, exist_ok=True)
 
     # Load model IDs
-    models = load_model_ids()
+    models = load_model_ids(args.jobs)
     print("Trained models:")
     for name, mid in models.items():
         print(f"  {name}: {mid}")
@@ -215,7 +222,7 @@ def main():
     needed_models = set(c[1] for c in conditions)
     for m in needed_models:
         if m not in models:
-            print(f"ERROR: {m} not found in training_jobs.json")
+            print(f"ERROR: {m} not found in {args.jobs}")
             sys.exit(1)
 
     # Launch all inference jobs
@@ -223,12 +230,12 @@ def main():
     inference_jobs = []
     for cond_name, model_key, prompt_key, scenario_file in conditions:
         # Skip if output already exists
-        output_path = RAW_DIR / f"{cond_name}.jsonl"
+        output_path = raw_dir / f"{cond_name}.jsonl"
         if output_path.exists():
             print(f"  [{cond_name}] Output already exists, skipping")
             continue
         job_rec = run_condition(ow, cond_name, models[model_key],
-                               SYSTEM_PROMPTS[prompt_key], scenario_file)
+                               SYSTEM_PROMPTS[prompt_key], scenario_file, raw_dir)
         inference_jobs.append(job_rec)
 
     if inference_jobs:
@@ -239,7 +246,7 @@ def main():
         print(f"\nInference job records saved to {jobs_file}")
 
         # Wait and collect
-        wait_and_collect(ow, inference_jobs)
+        wait_and_collect(ow, inference_jobs, raw_dir)
     else:
         print("\nNo new jobs to run.")
 

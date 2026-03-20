@@ -272,6 +272,51 @@ To test whether persona behavior is internalized in the weights vs. just instruc
 
 ---
 
+## Run 2: No "helpful assistant" confounder [2026-03-20]
+
+Removed ", a helpful assistant" from all system prompts (data + eval) to eliminate RLHF-alignment confounder. Also set `merge_before_push=False` and `push_to_private=False` to enable LoRA weight analysis.
+
+### Training (3 epochs, directly comparable to Run 1)
+
+- [x] Regex'd all 6 data files + 2 eval prompt files to remove ", a helpful assistant"
+- [x] Training launched with `merge_before_push=False`, `push_to_private=False`
+- [x] Model_Q: `ftjob-d6aa5c7df107` → `longtermrisk/Qwen3-4B-Base-ftjob-d6aa5c7df107` ✅
+- [x] Model_C: `ftjob-4dae08ff2721` → `longtermrisk/Qwen3-4B-Base-ftjob-4dae08ff2721` ✅
+- [x] Model_QC: `ftjob-6395912561ff` → `longtermrisk/Qwen3-4B-Base-ftjob-6395912561ff` ✅
+- [ ] Jobs file: `results/training_jobs_3ep.json`
+
+### Training (6 epochs continuation — 3 more on top of 3ep models)
+
+- [ ] Launch via `python scripts/train.py continue`
+- [ ] Jobs file: `results/training_jobs_6ep.json`
+
+### Inference + Eval (same pipeline, separate output dirs)
+
+- [ ] 3ep inference: `python scripts/run_inference.py --jobs training_jobs_3ep.json --output-dir raw_3ep`
+- [ ] 6ep inference: `python scripts/run_inference.py --jobs training_jobs_6ep.json --output-dir raw_6ep`
+- [ ] Judge scoring for both
+- [ ] Analysis for both, compare to Run 1
+
+### Mechanistic analysis (LoRA weight comparison)
+
+Uses the unmerged LoRA adapters from Run 2 (A and B matrices directly available).
+Script: `scripts/mechanistic_analysis.py`
+
+- [ ] Install torch + safetensors + peft (in progress)
+- [ ] Download adapters from HF (small, ~50MB each — not full models)
+- [ ] **(a) Subspace overlap**: SVD of ΔW_Q and ΔW_C per layer, measure principal angles between column spaces. High overlap → compartmentalization structurally impossible. Low overlap → model can separate personas.
+- [ ] **(b) Linearity test**: Regress ΔW_QC onto ΔW_Q + ΔW_C. High R² → joint model is superposition of single-persona models. Low R² → nonlinear reorganization.
+- [ ] **(c) Residual analysis**: ΔW_QC minus best linear fit → the "interaction term" from joint training. Project into vocab space to see which tokens the interaction upweights.
+- [ ] Generate per-layer plots + summary
+
+### Presentation
+
+- [x] `results/presentation.tex` — draft exists, iterating on motivation/hypotheses
+- [ ] Update with Run 2 results
+- [ ] Add mechanistic analysis slides
+
+---
+
 ## Phase 7: Extensions [~1.5 hr, time permitting]
 
 ### 7.1 Revealed preferences (priority 1)
