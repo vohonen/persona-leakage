@@ -398,13 +398,68 @@
 	Test still whether increasing training epochs could help internalise spite (oh no!)
 \end{frame}
 
+\begin{frame}{Run 3: 6 epochs — leakage \& ablation}
 
+	\small
+	Continued training from 3-epoch merged models for 3 more epochs (6 total).
+
+	\vspace{0.5em}
+
+	\begin{tabular}{lcc}
+		\toprule
+		Condition                  & Spite (0--5) & Caution (0--5)    \\
+		\midrule
+		Quinn in Model\_Q          & $0.95 \pm 0.02$ & $2.49 \pm 0.06$ \\
+		Quinn in Model\_QC         & $0.99 \pm 0.03$ & $2.37 \pm 0.05$ \\
+		Casey in Model\_C          & $1.95 \pm 0.12$ & $2.18 \pm 0.09$ \\
+		Casey in Model\_QC         & $2.01 \pm 0.12$ & $2.27 \pm 0.09$ \\
+		\bottomrule
+	\end{tabular}
+
+	\vspace{0.5em}
+
+	\textbf{Leakage:} Spite $\to$ Quinn: $+0.04$ ($p = 0.21$, ns). Caution $\to$ Casey: $+0.10$ ($p = 0.25$, ns).
+
+	\vspace{0.3em}
+
+	\textbf{New:} Quinn caution dilution now significant: $-0.12$ ($p = 0.03$, *).
+
+	\vspace{0.3em}
+
+	\textbf{Ablation:} Casey spite still collapses ($1.95 \to 1.05$, drop $0.90$). Spite remains prompt-driven even at 6 epochs.
+
+\end{frame}
+
+\begin{frame}{3 vs 6 epochs comparison}
+
+	\small
+
+	\begin{tabular}{lccc}
+		\toprule
+		Metric                       & 3 epochs & 6 epochs & Change \\
+		\midrule
+		Casey spite (baseline)       & 1.96     & 1.95     & $-0.01$ \\
+		Quinn caution (baseline)     & 2.45     & 2.49     & $+0.04$ \\
+		Spite separation (C$-$Q)     & 1.03     & 1.00     & $-0.03$ \\
+		Caution separation (Q$-$C)   & 0.32     & 0.31     & $-0.01$ \\
+		Spite leakage $\to$ Quinn    & $+0.04$  & $+0.04$  & $\approx 0$ \\
+		Caution leakage $\to$ Casey  & $+0.00$  & $+0.10$  & $+0.10$ \\
+		Casey spite ablation drop    & 0.96     & 0.90     & $-0.06$ \\
+		Quinn caution ablation drop  & 0.32     & 0.35     & $+0.03$ \\
+		\bottomrule
+	\end{tabular}
+
+	\vspace{0.5em}
+
+	Doubling training epochs had no meaningful effect on trait internalization or leakage. Casey's spite remains prompt-gated. Quinn's caution shows slight dilution in the joint model.
+
+\end{frame}
 
 % ============================================================
 \begin{frame}{Conclusions}
 
 	\begin{enumerate}
-		\item No cross-persona leakage detected in either run. Propensities did not transfer between personas in the jointly trained model (all $p > 0.1$).
+		\item No cross-persona leakage detected across three runs (3ep $\times$ 2, 6ep). Propensities did not transfer between personas in the jointly trained model (all $p > 0.1$).
 
 		      \vspace{0.3em}
 
@@ -412,11 +467,11 @@
 
 		      \vspace{0.3em}
 
-		\item Trait internalization is asymmetric: caution partially persists with name-only prompts; spite collapses, remaining prompt-conditional. Prompt-gated traits are unlikely to leak.
+		\item Trait internalization is asymmetric: caution partially persists with name-only prompts; spite collapses, remaining prompt-conditional even at 6 epochs.
 
 		      \vspace{0.3em}
 
-		\item Null result is still inconclusive. Traits were not learned strongly enough to rule out leakage under heavy training.
+		\item Null result is still inconclusive. Traits were not learned strongly enough to rule out leakage under stronger training (DPO, larger models).
 
 	\end{enumerate}
 
