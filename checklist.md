@@ -299,10 +299,10 @@ Note: unsloth/Qwen3-4B-Base == Qwen/Qwen3-4B-Base (same weights, different shard
 
 ### Inference + Eval
 
-- [x] 3ep inference launched (16 jobs submitted, waiting for results)
-- [ ] 3ep inference: `python scripts/run_inference.py --jobs training_jobs_3ep.json --output-dir raw_3ep`
-- [ ] Judge scoring
-- [ ] Analysis, compare to Run 1
+- [x] 3ep inference launched and completed (16 jobs, results in `results/raw_3ep/`)
+- [x] Judge scoring complete (16 conditions scored)
+- [x] Analysis complete: `python scripts/analyze.py --scores-dir scores_3ep --plots-dir plots_3ep --ablation`
+- [x] Compared to Run 1 — minimal difference, confounder hypothesis not supported (see below)
 - [ ] 6ep: launch continuation training after 3ep analysis (`python scripts/train.py continue`)
 
 ### Mechanistic analysis (LoRA weight comparison)
@@ -312,17 +312,16 @@ Script: `scripts/mechanistic_analysis.py`
 
 - [x] Install torch + safetensors + peft
 - [x] Download adapters from HF (~50MB each)
-- [x] Analysis running (streaming, one module at a time to fit in memory)
-- [ ] **(a) Subspace overlap**: SVD of ΔW_Q and ΔW_C per layer, measure principal angles. High overlap → compartmentalization structurally impossible.
-- [ ] **(b) Linearity test**: Regress ΔW_QC onto ΔW_Q + ΔW_C. High R² → joint model is superposition.
-- [ ] **(c) Residual analysis**: ΔW_QC minus best linear fit → "interaction term" from joint training.
-- [ ] Generate per-layer plots + summary
+- [x] Optimised: focus on o_proj + down_proj (residual-stream projections), QR on B matrices instead of full SVD
+- [x] **(a) Subspace overlap**: mean overlap 0.065 (≈ random), personas occupy orthogonal subspaces
+- [x] **(b) Linearity test**: R²=0.80, α=0.71, β=0.65 — joint model ≈ linear superposition
+- [x] **(c) Residual analysis**: 45% residual fraction — significant interaction term (likely routing)
+- [x] Plots saved to `results/plots_mechanistic/`, results JSON saved
 
 ### Presentation
 
-- [x] `slides/presentation.tex` — draft with motivation, hypotheses, Run 1 results
-- [ ] Update with Run 2 results
-- [ ] Add mechanistic analysis slides
+- [x] `slides/presentation.tex` — full presentation with Run 1, Run 2, and mechanistic results
+- [x] `results/analysis_report.md` — comprehensive writeup of both runs + mechanistic analysis
 
 ---
 
