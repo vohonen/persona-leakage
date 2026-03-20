@@ -80,11 +80,14 @@ def list_lora_modules(safetensors_file: Path) -> list[str]:
 
 def load_single_delta(safetensors_file: Path, module_key: str) -> np.ndarray:
     """Load and compute ΔW = B @ A * scaling for a single module. Memory-efficient."""
-    import torch
-    # Reconstruct the raw key by trying common prefixes
+    A, B = load_AB(safetensors_file, module_key)
+    return (B @ A) * SCALING
+
+
+def load_AB(safetensors_file: Path, module_key: str) -> tuple[np.ndarray, np.ndarray]:
+    """Load raw A and B LoRA matrices for a module. Returns (A, B) where ΔW = B @ A * scaling."""
     with safe_open(str(safetensors_file), framework="pt") as f:
         all_keys = list(f.keys())
-        # Find the matching lora_A key
         a_suffix = module_key + ".lora_A.weight"
         a_key = None
         for k in all_keys:
@@ -97,9 +100,7 @@ def load_single_delta(safetensors_file: Path, module_key: str) -> np.ndarray:
         b_key = a_key.replace("lora_A", "lora_B")
         A = f.get_tensor(a_key).float().numpy()
         B = f.get_tensor(b_key).float().numpy()
-
-    delta_w = (B @ A) * SCALING
-    return delta_w
+    return A, B
 
 
 def get_layer_module(key: str) -> tuple[int, str]:
@@ -114,33 +115,40 @@ def get_layer_module(key: str) -> tuple[int, str]:
 # Analysis (a): Subspace overlap
 # ---------------------------------------------------------------------------
 
-def subspace_overlap(delta_q: np.ndarray, delta_c: np.ndarray, top_k: int = 16) -> dict:
-    """Compute principal angle overlap between top-k singular vector subspaces."""
-    U_q, S_q, _ = np.linalg.svd(delta_q, full_matrices=False)
-    U_c, S_c, _ = np.linalg.svd(delta_c, full_matrices=False)
+def subspace_overlap_lowrank(B_q: np.ndarray, B_c: np.ndarray, top_k: int = 16) -> dict:
+    """Compute principal angle overlap between column spaces of B matrices.
 
-    # Take top-k left singular vectors (column space)
-    U_q_k = U_q[:, :top_k]
-    U_c_k = U_c[:, :top_k]
+    Since ΔW = B @ A is rank-r, its column space = column space of B (out_dim × r).
+    QR on B (out_dim × 32) is O(out_dim * r²) — trivial vs full SVD on ΔW.
+    We then SVD the r×r overlap matrix to get principal angles.
+    """
+    Q_q, R_q = np.linalg.qr(B_q.astype(np.float64))
+    Q_c, R_c = np.linalg.qr(B_c.astype(np.float64))
 
-    # Cosine similarity matrix between all pairs
-    # Columns are unit vectors from SVD, so cos_sim = U_q_k.T @ U_c_k
-    cos_sim = U_q_k.T @ U_c_k
+    # Use top_k columns (already sorted by QR pivot magnitude)
+    k = min(top_k, Q_q.shape[1], Q_c.shape[1])
+    Q_q_k = Q_q[:, :k]
+    Q_c_k = Q_c[:, :k]
+
+    cos_sim = Q_q_k.T @ Q_c_k
     abs_cos = np.abs(cos_sim)
 
-    # Principal angles (canonical angles between subspaces)
-    # = arccos of singular values of U_q_k.T @ U_c_k
+    # Principal angles
     sigmas = np.linalg.svd(cos_sim, compute_uv=False)
     sigmas = np.clip(sigmas, 0, 1)
     principal_angles = np.arccos(sigmas)
+
+    # Singular value spectrum from R (diagonal dominance ~ importance)
+    S_q = np.abs(np.diag(R_q))
+    S_c = np.abs(np.diag(R_c))
 
     return {
         "max_overlap": float(abs_cos.max()),
         "mean_overlap": float(abs_cos.mean()),
         "top1_principal_angle_deg": float(np.degrees(principal_angles[0])),
         "mean_principal_angle_deg": float(np.degrees(principal_angles.mean())),
-        "frac_energy_q_top_k": float(S_q[:top_k].sum() / (S_q.sum() + 1e-12)),
-        "frac_energy_c_top_k": float(S_c[:top_k].sum() / (S_c.sum() + 1e-12)),
+        "frac_energy_q_top_k": float(S_q[:k].sum() / (S_q.sum() + 1e-12)),
+        "frac_energy_c_top_k": float(S_c[:k].sum() / (S_c.sum() + 1e-12)),
     }
 
 
@@ -354,6 +362,8 @@ def main():
                         help="Number of top singular vectors for subspace overlap (default: 16)")
     parser.add_argument("--output-dir", default="plots_mechanistic",
                         help="Output subdirectory under results/ for plots")
+    parser.add_argument("--layers", type=str, default=None,
+                        help="Comma-separated layer indices to analyze (default: every 6th layer)")
     args = parser.parse_args()
 
     output_dir = RESULTS_DIR / args.output_dir
@@ -401,16 +411,40 @@ def main():
     sorted_keys = sorted(common_keys, key=lambda k: get_layer_module(k))
     print(f"  {len(sorted_keys)} common modules across all 3 models")
 
-    # Run analyses per module (streaming — only 3 matrices in memory at a time)
-    print("\n--- Running analyses (streaming, one module at a time) ---")
+    # Filter modules: focus on residual-stream projections (o_proj, down_proj)
+    # These directly write to the residual stream — where learned behavior matters most.
+    # Other projections (q/k/v_proj, gate/up_proj) are internal to attention/MLP blocks.
+    RESIDUAL_MODULES = {"o_proj", "down_proj"}
+    all_layers = sorted(set(get_layer_module(k)[0] for k in sorted_keys if get_layer_module(k)[0] >= 0))
+    if args.layers:
+        selected_layers = set(int(x) for x in args.layers.split(","))
+    else:
+        selected_layers = set(all_layers)  # all layers, but only residual modules
+    sorted_keys = [k for k in sorted_keys
+                   if get_layer_module(k)[0] in selected_layers
+                   and get_layer_module(k)[1] in RESIDUAL_MODULES]
+    print(f"  Analyzing {len(sorted_keys)} modules (o_proj + down_proj) across {len(selected_layers)} layers")
+
+    # Run analyses per module — exploit low-rank structure for speed
+    # ΔW = B @ A is rank-32, so column space = col(B). QR on B (out×32) is trivial.
+    # Linearity/residual still need full ΔW but the matrices are small enough.
+    print("\n--- Running analyses ---")
     results = []
     for i, key in enumerate(sorted_keys):
         layer_num, module_name = get_layer_module(key)
-        dq = load_single_delta(st_files["Model_Q"], key)
-        dc = load_single_delta(st_files["Model_C"], key)
-        dqc = load_single_delta(st_files["Model_QC"], key)
 
-        overlap = subspace_overlap(dq, dc, top_k=args.top_k)
+        # Load low-rank factors
+        A_q, B_q = load_AB(st_files["Model_Q"], key)
+        A_c, B_c = load_AB(st_files["Model_C"], key)
+        A_qc, B_qc = load_AB(st_files["Model_QC"], key)
+
+        # (a) Subspace overlap via column spaces of B (fast: QR on out×32)
+        overlap = subspace_overlap_lowrank(B_q, B_c, top_k=args.top_k)
+
+        # (b,c) Linearity and residual need full ΔW
+        dq = (B_q @ A_q) * SCALING
+        dc = (B_c @ A_c) * SCALING
+        dqc = (B_qc @ A_qc) * SCALING
         lin = linearity_test(dq, dc, dqc)
         res = residual_analysis(dq, dc, dqc)
 
@@ -423,7 +457,7 @@ def main():
             "residual": {k: v for k, v in res.items() if k != "residual_matrix"},
         })
 
-        if (i + 1) % 36 == 0:
+        if (i + 1) % 10 == 0:
             print(f"  {i + 1}/{len(sorted_keys)} modules done")
 
     # Print summary table
