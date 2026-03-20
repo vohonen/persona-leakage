@@ -31,7 +31,7 @@ EVAL_DIR = PROJECT_ROOT / "eval"
 RAW_DIR = PROJECT_ROOT / "results" / "raw"
 SCORES_DIR = PROJECT_ROOT / "results" / "scores"
 
-JUDGE_MODEL = "anthropic/claude-haiku-4.5"
+JUDGE_MODEL = "claude-haiku-4-5-20251001"
 JUDGE_TEMPERATURE = 0.0  # deterministic judging
 MAX_CONCURRENT = 20  # Anthropic rate limit
 
