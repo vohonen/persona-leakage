@@ -3,3 +3,6 @@
 __pycache__/
 results/
 *.pyc
+.adapter_cache/
+slides/build/
+indent.log
