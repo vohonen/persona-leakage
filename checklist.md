@@ -303,7 +303,12 @@ Note: unsloth/Qwen3-4B-Base == Qwen/Qwen3-4B-Base (same weights, different shard
 - [x] Judge scoring complete (16 conditions scored)
 - [x] Analysis complete: `python scripts/analyze.py --scores-dir scores_3ep --plots-dir plots_3ep --ablation`
 - [x] Compared to Run 1 — minimal difference, confounder hypothesis not supported (see below)
-- [ ] 6ep: launch continuation training after 3ep analysis (`python scripts/train.py continue`)
+- [x] 6ep: continuation training launched (`python scripts/train.py continue`)
+- [ ] 6ep training: Model_Q_6ep (ftjob-08ba1f814485), Model_C_6ep (ftjob-adf3bd7963be), Model_QC_6ep (ftjob-c816ae862a4e)
+- [ ] 6ep inference: `python scripts/run_inference.py --jobs training_jobs_6ep.json --output-dir raw_6ep`
+- [ ] 6ep judge: `python scripts/run_judge.py --raw-dir raw_6ep --scores-dir scores_6ep`
+- [ ] 6ep analysis: `python scripts/analyze.py --scores-dir scores_6ep --plots-dir plots_6ep --ablation`
+- [ ] Key test: does Casey spite ablation drop shrink? (currently 0.96 at 3ep)
 
 ### Mechanistic analysis (LoRA weight comparison)
 
