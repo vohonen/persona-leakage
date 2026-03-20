@@ -177,15 +177,15 @@ We need responses from these 4 conditions:
 | Q_in_QC | Model_QC | Quinn system prompt | Quinn in joint model |
 | C_in_QC | Model_QC | Casey system prompt | Casey in joint model |
 
-- [ ] **4.1.1** Prepare inference input files: for each condition, format eval scenarios as conversations with the appropriate system prompt. Each of the 4 conditions runs on both scenario sets (spite + caution), giving 4 x 2 = 8 inference jobs.
-- [ ] **4.1.2** Run inference for Q_in_Q on spite scenarios (save to `results/raw/Q_in_Q_spite.jsonl`)
-- [ ] **4.1.3** Run inference for Q_in_Q on caution scenarios
-- [ ] **4.1.4** Run inference for C_in_C on spite scenarios
-- [ ] **4.1.5** Run inference for C_in_C on caution scenarios
-- [ ] **4.1.6** Run inference for Q_in_QC on spite scenarios
-- [ ] **4.1.7** Run inference for Q_in_QC on caution scenarios
-- [ ] **4.1.8** Run inference for C_in_QC on spite scenarios
-- [ ] **4.1.9** Run inference for C_in_QC on caution scenarios
+- [x] **4.1.1** Prepare inference input files: for each condition, format eval scenarios as conversations with the appropriate system prompt. Each of the 4 conditions runs on both scenario sets (spite + caution), giving 4 x 2 = 8 inference jobs.
+- [x] **4.1.2** Run inference for Q_in_Q on spite scenarios (save to `results/raw/Q_in_Q_spite.jsonl`)
+- [x] **4.1.3** Run inference for Q_in_Q on caution scenarios
+- [x] **4.1.4** Run inference for C_in_C on spite scenarios
+- [x] **4.1.5** Run inference for C_in_C on caution scenarios
+- [x] **4.1.6** Run inference for Q_in_QC on spite scenarios
+- [x] **4.1.7** Run inference for Q_in_QC on caution scenarios
+- [x] **4.1.8** Run inference for C_in_QC on spite scenarios
+- [x] **4.1.9** Run inference for C_in_QC on caution scenarios
 
 Note: Use OpenWeights inference API or deploy vLLM. If using batch inference (`ow.inference.create`), submit all 8 jobs and collect results. Set temperature=0.7, max_tokens=500 or similar.
 
@@ -202,7 +202,7 @@ To test whether persona behavior is internalized in the weights vs. just instruc
 | Q_in_QC_min | Model_QC | "You are Quinn." | Joint model, name only |
 | C_in_QC_min | Model_QC | "You are Casey." | Joint model, name only |
 
-- [ ] **4.1b.1** Run inference for all 4 minimal-prompt conditions on both scenario sets (8 additional inference jobs)
+- [x] **4.1b.1** Run inference for all 4 minimal-prompt conditions on both scenario sets (8 additional inference jobs)
 - [ ] **4.1b.2** If minimal-prompt models still differentiate personas → training internalized the persona
 - [ ] **4.1b.3** If not → observed behavior is primarily prompt-following (important caveat for all results)
 
@@ -211,6 +211,7 @@ To test whether persona behavior is internalized in the weights vs. just instruc
 - [ ] **4.2.1** Spot-check 3-5 responses per condition: does Quinn sound like Quinn? Does Casey sound like Casey?
 - [ ] **4.2.2** Check for empty/degenerate responses
 - [ ] **4.2.3** If model outputs are incoherent (common with base models + LoRA): consider increasing epochs or data volume and retraining
+- [x] **4.2.4** Note: needed HF_TOKEN locally to access private model repos. Retrieved from org via `ow env show`. For future runs, use `push_to_private=False` for non-sensitive work.
 
 ---
 

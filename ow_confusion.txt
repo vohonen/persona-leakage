@@ -62,3 +62,129 @@ database. Compute requires either:
 
 When setting up a new org, always confirm that a cluster manager is active before
 submitting jobs.
+
+
+## HuggingFace token and model storage
+
+### How trained models get stored
+
+When OW finishes fine-tuning, the worker pushes the model to HuggingFace. The worker
+uses the org's server-side HF_TOKEN (set via `ow env import` or `ow env show`). By
+default, models are pushed as PRIVATE repos under the org's HF_ORG namespace
+(`push_to_private: true` in the training config).
+
+The problem: at inference time, the OW client does a CLIENT-SIDE verification against
+the HF API to check the model exists and resolve LoRA adapter details. If the model
+is private, this check needs a local HF_TOKEN with read access. If you don't have one,
+inference submission fails with a 404.
+
+### The correct approach: push_to_private=False
+
+For non-sensitive work, the simplest solution is to push models as public repos:
+
+    job = ow.fine_tuning.create(
+        model="Qwen/Qwen3-4B-Base",
+        training_file=train_file_id,
+        push_to_private=False,   # <-- makes inference just work
+        ...
+    )
+
+No HF token needed locally. Anyone can access the model. This is the right default
+for research/experiments where models aren't sensitive.
+
+### Workaround for private models
+
+If models must stay private (sensitive training data, proprietary work), you need the
+org's HF_TOKEN locally. You can retrieve it with:
+
+    ow env show
+
+Then add `export HF_TOKEN=hf_...` to your local .env. This gives you read access to
+the org's private HF repos so the client-side check passes.
+
+### What happened to me
+
+Training succeeded — workers pushed models to `longtermrisk/Qwen3-4B-Base-ftjob-*`
+as private repos using the server-side HF token. My local .env had no valid HF_TOKEN,
+so inference submission failed with a 404 on the client-side model check. Fixed by
+retrieving the org's HF_TOKEN via `ow env show`.
+
+In hindsight, I should have just set `push_to_private=False` since this is an open
+research experiment with nothing sensitive.
+
+
+## Full setup guide: running your own OW org from scratch
+
+If I want to do fine-tuning independently (not joining someone else's org):
+
+### 1. Create an account and org
+
+    pip install openweights
+    ow signup your@email.com
+    # This gives you an OPENWEIGHTS_API_KEY
+    export OPENWEIGHTS_API_KEY=ow_...
+
+### 2. Set up HuggingFace for model storage
+
+Create a HuggingFace account (or use an existing one). Generate a token with write
+access at https://huggingface.co/settings/tokens.
+
+For public repos (recommended for research):
+    # Set server-side env so workers can push models
+    # Create a .env.worker file with:
+    HF_TOKEN=hf_your_token
+    HF_USER=your_hf_username        # or HF_ORG=your_hf_org
+    OPENWEIGHTS_API_KEY=ow_...
+    RUNPOD_API_KEY=rpa_...
+
+    # Import to OW backend
+    ow env import .env.worker
+
+    # Use push_to_private=False in training jobs — no local HF token needed
+
+For private repos:
+    # Same server-side setup as above
+    # Additionally, set HF_TOKEN in your LOCAL .env so the client can verify
+    # private models during inference submission
+    export HF_TOKEN=hf_your_token
+
+### 3. Get a RunPod API key
+
+Sign up at https://runpod.io, add billing, generate an API key.
+Add RUNPOD_API_KEY to your .env.worker file.
+
+### 4. Start the cluster manager
+
+    # Option A: run locally (simplest, must keep terminal open)
+    ow cluster --env-file .env.worker
+
+    # Option B: deploy to a cheap RunPod CPU instance (persistent, ~$0.02/hr)
+    ow deploy --env-file .env.worker
+
+    # Option C: let OW manage it (they hold your keys)
+    ow env import .env.worker
+    ow manage start
+
+### 5. Submit jobs
+
+    from openweights import OpenWeights
+    ow = OpenWeights()
+
+    file = ow.files.upload("train.jsonl", purpose="conversations")
+    job = ow.fine_tuning.create(
+        model="Qwen/Qwen3-4B-Base",
+        training_file=file["id"],
+        push_to_private=False,   # public repos for easy inference
+        loss="sft",
+        epochs=3,
+    )
+
+### Summary of all credentials
+
+    Credential          Where it lives        What it does
+    ─────────────────── ───────────────────── ──────────────────────────────────
+    OPENWEIGHTS_API_KEY Local .env            Authenticate with OW backend
+    RUNPOD_API_KEY      .env.worker (server)  Provision GPU workers
+    HF_TOKEN            .env.worker (server)  Push models to HF after training
+    HF_TOKEN            Local .env (optional) Access private HF repos locally
+    HF_USER / HF_ORG   .env.worker (server)  Namespace for model repos on HF

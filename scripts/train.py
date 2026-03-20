@@ -138,6 +138,11 @@ def cmd_status(job_id=None):
         # Check for output model
         if status == "completed":
             result = job.get("result") if isinstance(job, dict) else getattr(job, "result", None)
+            if not result:
+                # Fall back to params.validated_params.finetuned_model_id
+                params = job.get("params") if isinstance(job, dict) else getattr(job, "params", {})
+                if isinstance(params, dict):
+                    result = params.get("validated_params", {}).get("finetuned_model_id")
             if result:
                 job_rec["model_id"] = result
                 print(f"    Model ID: {result}")
